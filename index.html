@@ -1,6 +1,312 @@
-<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#09182c"><title>Bisturí 3D — Editor</title><link rel="stylesheet" href="styles.css"><link rel="manifest" href="manifest.webmanifest"><script type="importmap">{"imports":{"three":"https://esm.sh/three@0.169.0","three/addons/":"https://esm.sh/three@0.169.0/examples/jsm/"}}</script></head><body><header><div class="brand"><span class="mark">◈</span><div><strong>Bisturí <em>3D</em></strong><small>Editor de precisión para separar modelos 3D</small></div></div><div class="head-actions"><button id="newBtn" class="subtle">Nuevo</button><button id="openBtn">Abrir modelo 3D</button><button id="saveProjectBtn" class="subtle">Guardar proyecto</button><button id="openProjectBtn" class="subtle">Recuperar proyecto</button><input id="projectFile" type="file" accept=".json,.bisturi3d" hidden><input id="file" type="file" accept=".stl,.obj,.glb,.fbx,.3mf" hidden></div></header><main><aside class="left"><h2>Proyecto</h2><label>Nombre <input id="projectName" value="Nuevo proyecto"></label><label>Altura final (cm) <input id="height" type="number" min="0.1" step="0.1" placeholder="Ej. 15"></label><button id="scaleBtn" class="full">Aplicar altura proporcional</button><label>Boquilla (mm)<select id="nozzle"><option>0.2</option><option selected>0.4</option><option>0.6</option><option>0.8</option></select></label><p class="hint">Las camas configurables y la asignación de piezas están en el panel derecho.</p><h2>Modo</h2><div class="triple"><button class="mode" data-mode="Automático">Auto</button><button class="mode" data-mode="Manual">Manual</button><button class="mode active" data-mode="Mixto">Mixto</button></div><h2>Herramientas</h2><div class="tools"><button id="selectTool" class="active">Seleccionar</button><button id="moveTool">Mover</button><button id="xrayBtn">Rayos X</button><label>Orientación del plano<select id="cutOrientation"><option value="Y">Horizontal (Y)</option><option value="X">Vertical (X)</option><option value="Z">Vertical (Z)</option><option value="inclinado">Inclinado</option></select></label><div id="cutAngles" hidden><label>Inclinación X (grados)<input id="cutAngleX" type="number" value="25" step="1"></label><label>Inclinación Z (grados)<input id="cutAngleZ" type="number" value="0" step="1"></label></div><label>Posición del plano (% de la malla) <input id="cutPercent" type="number" min="1" max="99" value="50"></label><button id="cutPlaneBtn">Aplicar corte por plano</button><div class="bed-form connector-form"><h2>Encastre cilíndrico · experimental</h2><p class="hint">Selecciona una de las dos partes recién cortadas. El sistema propondrá un pasador en el centro de una zona plana segura.</p><label>Diámetro del pasador (mm)<input id="pegDiameter" type="number" min="0.5" max="40" value="5" step="0.5"></label><label>Profundidad (mm)<input id="pegDepth" type="number" min="1" max="40" value="6" step="0.5"></label><label>Holgura lateral (mm)<input id="pegClearance" type="number" min="0.05" max="1" value="0.2" step="0.05"></label><button id="pegApplyBtn" class="full secondary">Agregar pasador y alojamiento</button><p class="hint">Requiere una superficie de corte simple y mallas cerradas; puede fallar en modelos complejos. Revisa siempre el STL en tu laminador.</p></div><button id="explodeBtn">Explosión</button><button id="resetView">Centrar</button><button id="viewBed3D">Ver cama 3D</button><button id="undoBtn">Atrás ↶</button><button id="redoBtn">Rehacer ↷</button></div><p class="hint">Atrás significa Deshacer, nunca salir del editor.</p></aside><section class="workspace"><div class="viewbar"><span id="modelInfo">Abre un archivo o prueba el modelo de ejemplo.</span><button id="demoBtn" class="subtle">Modelo de ejemplo</button></div><div id="viewport"></div><div class="status" id="status" role="status">Listo para importar. El archivo permanece en este navegador.</div></section><aside class="right"><h2>Componentes</h2><p class="hint">Selecciona una pieza en la vista o en esta lista.</p><div id="pieces" class="pieces"><p class="hint">Sin piezas cargadas.</p></div><h2>Camas de impresión</h2><p class="hint">Crea camas y envía la malla seleccionada a una de ellas. Las dimensiones se expresan en mm.</p>
-<label>Cama activa<select id="bedSelect"></select></label><div class="bed-actions"><button id="addBed" class="secondary">+ Nueva cama</button><button id="deleteBed" class="secondary">Eliminar cama</button></div>
-<div id="bedForm" class="bed-form" hidden><label>Nombre<input id="bedName" maxlength="40" value="Cama 2"></label><div class="bed-dims"><label>X<input id="bedX" type="number" min="1" value="256"></label><label>Y<input id="bedY" type="number" min="1" value="256"></label><label>Z<input id="bedZ" type="number" min="1" value="256"></label></div><button id="saveBed" class="full">Crear cama</button></div>
-<button id="assignBed" class="full">Enviar pieza seleccionada a esta cama</button><button id="autoLayout" class="full secondary">Distribuir piezas de esta cama</button>
-<div class="bed-map-box"><canvas id="bedCanvas" width="320" height="290" aria-label="Vista superior de las piezas asignadas a la cama"></canvas><div id="bedChecks" class="hint"></div></div><div id="bedPieces" class="hint"></div><div class="bed-form"><h2>Posición y giro de la pieza</h2><p class="hint">Selecciona una malla ya asignada a esta cama. Puedes modificarla con estos campos o arrastrarla en la vista 3D de cama.</p><div class="bed-dims"><label>X (mm)<input id="placeX" type="number" step="0.1" value="0"></label><label>Y (mm)<input id="placeY" type="number" step="0.1" value="0"></label><label>Giro (°)<input id="placeRot" type="number" step="1" value="0"></label></div><button id="applyPlace" class="full secondary">Aplicar posición y giro</button><button id="centerBedView" class="full secondary">Centrar vista 3D de cama</button></div>
-<h2>Exportación</h2><button id="exportPlacedBed" class="full">Exportar cama colocada (STL conjunto)</button><button id="exportBed" class="full secondary">Descargar STLs de la cama (posicionados)</button><button id="exportBedsReport" class="full secondary">Descargar informe de camas</button><button id="exportBtn" class="full">Descargar STL seleccionado</button><button id="reportBtn" class="full secondary">Descargar informe</button><p class="hint">Puedes exportar las mallas existentes asignadas a cada cama. La vista 3D muestra posiciones y giros reales, pero las colisiones y límites se comprueban con cajas envolventes, no con geometría exacta. Los cortes horizontal, vertical e inclinado son experimentales en mallas de contorno cerrado simple; el encastre cilíndrico es experimental y los cortes complejos todavía no están implementados.</p><p class="hint">Para continuar otro día, descarga tu proyecto y vuelve a abrir ese archivo aquí. No hay almacenamiento automático ni en servidores.</p><h2>Información</h2><div id="stats" class="stats">Sin modelo</div></aside></main><div id="warning" class="warning" hidden><div><h2>¿Iniciar otro proyecto?</h2><p>Se perderán los cambios en memoria. Descarga antes los archivos que quieras conservar.</p><button id="cancelNew" class="secondary">Cancelar</button><button id="confirmNew">Descartar y continuar</button></div></div><script type="module" src="app.js"></script></body></html>
+import * as THREE from 'three';
+
+// Corta una malla triangular con un plano horizontal en su eje Y local.
+// Cierra las mitades cuando la intersección forma un solo contorno válido.
+export function sliceMeshHorizontal(geometry, level) {
+  const pos = geometry?.getAttribute('position');
+  if (!pos || pos.count < 3) {
+    throw Error('La malla no contiene triángulos.');
+  }
+
+  const index = geometry.getIndex();
+  const triangles = index ? index.count / 3 : pos.count / 3;
+  if (triangles > 250000) {
+    throw Error('Corte limitado a 250 000 triángulos por malla en esta versión.');
+  }
+
+  const box = geometry.boundingBox ||
+    geometry.computeBoundingBox() ||
+    geometry.boundingBox;
+  const span = Math.max(...box.getSize(new THREE.Vector3()).toArray(), 1);
+  const eps = span * 1e-6;
+
+  if (level <= box.min.y + eps || level >= box.max.y - eps) {
+    throw Error('El plano debe cruzar el interior de la malla.');
+  }
+
+  const tops = [];
+  const bottoms = [];
+  const segments = [];
+
+  const vertex = i => new THREE.Vector3(
+    pos.getX(i), pos.getY(i), pos.getZ(i)
+  );
+
+  const pushTri = (out, a, b, c) => {
+    out.push(...a.toArray(), ...b.toArray(), ...c.toArray());
+  };
+
+  const clip = (polygon, upper) => {
+    const output = [];
+
+    for (let i = 0; i < polygon.length; i++) {
+      const a = polygon[i];
+      const b = polygon[(i + 1) % polygon.length];
+      const da = a.y - level;
+      const db = b.y - level;
+      const insideA = upper ? da >= -eps : da <= eps;
+      const insideB = upper ? db >= -eps : db <= eps;
+
+      if (insideA) output.push(a);
+
+      if (insideA !== insideB) {
+        const t = Math.max(0, Math.min(1, da / (da - db)));
+        const p = a.clone().lerp(b, t);
+        p.y = level;
+        output.push(p);
+      }
+    }
+
+    if (output.length > 2) {
+      for (let i = 1; i < output.length - 1; i++) {
+        pushTri(
+          upper ? tops : bottoms,
+          output[0], output[i], output[i + 1]
+        );
+      }
+    }
+  };
+
+  for (let j = 0; j < triangles; j++) {
+    const v = [0, 1, 2].map(k =>
+      vertex(index ? index.getX(j * 3 + k) : j * 3 + k)
+    );
+
+    const above = v.some(p => p.y > level + eps);
+    const below = v.some(p => p.y < level - eps);
+
+    if (above && below) {
+      const crossings = [];
+
+      for (let i = 0; i < 3; i++) {
+        const a = v[i];
+        const b = v[(i + 1) % 3];
+        const da = a.y - level;
+        const db = b.y - level;
+
+        if (
+          (da > eps && db < -eps) ||
+          (da < -eps && db > eps)
+        ) {
+          const p = a.clone().lerp(b, da / (da - db));
+          p.y = level;
+          crossings.push(p);
+        } else if (Math.abs(da) <= eps && Math.abs(db) > eps) {
+          crossings.push(a.clone().setY(level));
+        }
+      }
+
+      if (
+        crossings.length === 2 &&
+        crossings[0].distanceToSquared(crossings[1]) > eps * eps
+      ) {
+        segments.push(crossings);
+      }
+    }
+
+    clip(v, true);
+    clip(v, false);
+  }
+
+  if (!segments.length) {
+    throw Error('No se pudo obtener una intersección cerrada con este plano.');
+  }
+
+  const pointKey = p =>
+    `${Math.round(p.x / eps)},${Math.round(p.z / eps)}`;
+
+  const nodes = new Map();
+
+  const add = (p, q) => {
+    const key = pointKey(p);
+    if (!nodes.has(key)) {
+      nodes.set(key, { p, neighbors: new Set() });
+    }
+    nodes.get(key).neighbors.add(pointKey(q));
+  };
+
+  for (const [a, b] of segments) {
+    add(a, b);
+    add(b, a);
+  }
+
+  if ([...nodes.values()].some(n => n.neighbors.size !== 2)) {
+    throw Error(
+      'El corte atraviesa bordes abiertos o geometría no manifold; ' +
+      'no se pueden cerrar ambas piezas con seguridad.'
+    );
+  }
+
+  const visited = new Set();
+  const loops = [];
+
+  for (const start of nodes.keys()) {
+    if (visited.has(start)) continue;
+
+    const keys = [];
+    const seen = new Set();
+    let curr = start;
+    let prev = null;
+
+    while (!seen.has(curr)) {
+      if (!nodes.has(curr)) throw Error('Contorno incompleto.');
+
+      seen.add(curr);
+      visited.add(curr);
+      keys.push(curr);
+
+      const next = [...nodes.get(curr).neighbors]
+        .find(k => k !== prev);
+
+      prev = curr;
+      curr = next;
+
+      if (keys.length > nodes.size + 1) {
+        throw Error('Contorno inválido.');
+      }
+    }
+
+    if (curr !== start || keys.length < 3) {
+      throw Error('Contorno de corte abierto o ambiguo.');
+    }
+
+    loops.push(keys.map(k => nodes.get(k).p));
+  }
+
+  if (loops.length > 1) {
+    throw Error(
+      'Se detectaron varios contornos. Este corte necesita ' +
+      'un algoritmo avanzado de triangulación.'
+    );
+  }
+
+  const polygon = loops[0];
+  const shape = polygon.map(p => new THREE.Vector2(p.x, p.z));
+  const faces = THREE.ShapeUtils.triangulateShape(shape, []);
+
+  if (!faces.length) {
+    throw Error('No se pudo cerrar la sección cortada.');
+  }
+
+  let connectorCentre = null;
+  let connectorRadius = 0;
+
+  for (const [i, j, k] of faces) {
+    const a = polygon[i];
+    const b = polygon[j];
+    const c = polygon[k];
+    const area = b.clone()
+      .sub(a)
+      .cross(c.clone().sub(a))
+      .length() * 0.5;
+    const perimeter =
+      a.distanceTo(b) + b.distanceTo(c) + c.distanceTo(a);
+    const radius = perimeter > 0 ? 2 * area / perimeter : 0;
+
+    if (radius > connectorRadius) {
+      connectorRadius = radius;
+      connectorCentre = a.clone()
+        .add(b)
+        .add(c)
+        .multiplyScalar(1 / 3);
+    }
+  }
+
+  for (const [i, j, k] of faces) {
+    const a = polygon[i];
+    const b = polygon[j];
+    const c = polygon[k];
+    const ny = new THREE.Vector3()
+      .crossVectors(b.clone().sub(a), c.clone().sub(a)).y;
+
+    // La tapa superior mira hacia -Y; la inferior, hacia +Y.
+    if (ny > 0) {
+      pushTri(bottoms, a, b, c);
+      pushTri(tops, c, b, a);
+    } else {
+      pushTri(bottoms, c, b, a);
+      pushTri(tops, a, b, c);
+    }
+  }
+
+  const make = arr => {
+    if (arr.length < 9) {
+      throw Error('Una de las mitades está vacía.');
+    }
+
+    const g = new THREE.BufferGeometry();
+    g.setAttribute(
+      'position',
+      new THREE.Float32BufferAttribute(arr, 3)
+    );
+    g.computeVertexNormals();
+    g.computeBoundingBox();
+    return g;
+  };
+
+  return {
+    upper: make(tops),
+    lower: make(bottoms),
+    contours: loops.length,
+    triangles: [tops.length / 9, bottoms.length / 9],
+    connectorCentre,
+    connectorRadius
+  };
+}
+
+// Permite orientar el plano en coordenadas mundiales y devuelve
+// las dos geometrías en las coordenadas locales de la pieza.
+export function sliceMeshByWorldPlane(mesh, normal, fraction) {
+  if (
+    !Number.isFinite(fraction) ||
+    fraction <= 0 ||
+    fraction >= 1
+  ) {
+    throw Error('El porcentaje debe estar entre 1 y 99.');
+  }
+
+  mesh.updateWorldMatrix(true, false);
+  const n = normal.clone().normalize();
+
+  if (n.lengthSq() < 0.9) {
+    throw Error('Normal de corte no válida.');
+  }
+
+  const rotation = new THREE.Quaternion()
+    .setFromUnitVectors(n, new THREE.Vector3(0, 1, 0));
+
+  const forward = new THREE.Matrix4()
+    .makeRotationFromQuaternion(rotation)
+    .multiply(mesh.matrixWorld);
+
+  const reverse = forward.clone().invert();
+  const rotated = mesh.geometry.clone();
+  rotated.applyMatrix4(forward);
+  rotated.computeBoundingBox();
+
+  const bounds = rotated.boundingBox;
+  const level = THREE.MathUtils.lerp(
+    bounds.min.y,
+    bounds.max.y,
+    fraction
+  );
+
+  try {
+    const result = sliceMeshHorizontal(rotated, level);
+
+    result.upper.applyMatrix4(reverse);
+    result.lower.applyMatrix4(reverse);
+    result.upper.computeVertexNormals();
+    result.lower.computeVertexNormals();
+
+    result.connectorPoint = result.connectorCentre
+      ?.clone()
+      .applyQuaternion(rotation.clone().invert()) || null;
+    result.connectorNormal = n.clone();
+    result.planeOffset = level;
+
+    return result;
+  } finally {
+    rotated.dispose();
+  }
+}
